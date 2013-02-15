@@ -28,6 +28,7 @@ import re
 import datetime
 
 from name_parser.parser import NameParser, InvalidNameException
+from reportlab.lib.validators import isNumber
 
 resultFilters = ["sub(pack|s|bed)", "nlsub(bed|s)?", "swesub(bed)?",
                  "(dir|sample|nfo)fix", "sample", "(dvd)?extras", 
@@ -116,21 +117,26 @@ def makeSceneShowSearchStrings(show):
 def makeSceneSeasonSearchString (show, segment, extraSearchType=None):
 
     myDB = db.DBConnection()
+    
+    correctedSegment = segment;
+    
+    if isNumber(segment):
+        correctedSegment += show.seasonoffset
 
     if show.air_by_date:
         numseasons = 0
         
         # the search string for air by date shows is just 
-        seasonStrings = [segment]
+        seasonStrings = [correctedSegment]
     
     else:
         numseasonsSQlResult = myDB.select("SELECT COUNT(DISTINCT season) as numseasons FROM tv_episodes WHERE showid = ? and season != 0", [show.tvdbid])
         numseasons = int(numseasonsSQlResult[0][0])
 
-        seasonStrings = ["S%02d" % segment]
+        seasonStrings = ["S%02d" % correctedSegment]
         # since nzbmatrix allows more than one search per request we search SxEE results too
         if extraSearchType == "nzbmatrix":
-            seasonStrings.append("%ix" % segment)
+            seasonStrings.append("%ix" % correctedSegment)
 
     showNames = set(makeSceneShowSearchStrings(show))
 
@@ -154,7 +160,7 @@ def makeSceneSeasonSearchString (show, segment, extraSearchType=None):
             if numseasons == 1:
                 toReturn.append('"'+curShow+'"')
             elif numseasons == 0:
-                toReturn.append('"'+curShow+' '+str(segment).replace('-',' ')+'"')
+                toReturn.append('"'+curShow+' '+str(correctedSegment).replace('-',' ')+'"')
             else:
                 term_list = [x+'*' for x in seasonStrings]
                 if show.air_by_date:
@@ -179,8 +185,8 @@ def makeSceneSearchString (episode):
     if episode.show.air_by_date and episode.airdate != datetime.date.fromordinal(1):
         epStrings = [str(episode.airdate)]
     else:
-        epStrings = ["S%02iE%02i" % (int(episode.season), int(episode.episode)),
-                    "%ix%02i" % (int(episode.season), int(episode.episode))]
+        epStrings = ["S%02iE%02i" % (int(episode.sceneseason), int(episode.sceneepisode)),
+                    "%ix%02i" % (int(episode.sceneseason), int(episode.sceneepisode))]
 
     # for single-season shows just search for the show name
     if numseasons == 1:
